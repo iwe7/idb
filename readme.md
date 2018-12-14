@@ -1,4 +1,4 @@
-> 浏览器端 indexed db 封装成更简洁易操作的接口
+> 浏览器端 indexed db 封装成更简洁易操作的接口, 数据库变化监控!
 
 ### 技术栈
 
@@ -27,49 +27,66 @@ async function bootstrap() {
       ]
     }
   };
-  let db = await openIdb("imeepos", 1, update).toPromise();
-  console.log(db);
-  let addResult = await db
-    .readwrite("member")
-    .add({
-      openid: "fromUser"
-    })
-    .toPromise();
-  console.log(addResult);
+  let db = await IDB.open("imeepos", 1, update, true).toPromise();
+  let obs = db
+    .readonly("member")
+    .count(true)
+    .pipe(distinctUntilChanged())
+    .subscribe(res => console.log(res));
+  let id = 1;
+  setInterval(() => {
+    db.readwrite("member")
+      .add({
+        openid: `fromUser${++id}`
+      })
+      .subscribe();
+  }, 1000);
 }
 bootstrap();
 ```
 
 ### docs
 
-#### openIdb
+#### IDB.open
 
 ```ts
-export function openIdb(
-  // 数据库名字
-  name: string = "imeepos",
-  // 数据库版本号
-  version: number = 1,
-  // 数据库更新及安装脚本
-  install?: IDbInstall
-): Observable<OpenIdbResult>;
+export class IDB {
+  static open(
+    name: string = "imeepos",
+    version: number = 1,
+    install?: IDbInstall,
+    listen?: boolean
+  ): Observable<IDB>;
+}
 ```
 
 #### IDbInstall
 
 ```ts
+// 改变数据库的操作
+export type IDBChange = "add" | "delete" | "clear" | "put";
+// 新建
+interface IdbCreate extends IDBObjectStoreParameters {
+  name: string;
+  index: IdbIndex[];
+}
+// 索引
+interface IdbIndex extends IDBIndexParameters {
+  name: string;
+  keyPath: string | string[];
+}
 export interface IDbInstall {
   [key: string]: {
-    // 新建
+    // 增
     create?: IdbCreate[];
-    // 更新
+    // 改
     update?: {
       [key: string]: {
         create: IdbIndex[];
         delete: string[];
       };
     };
-    // 删除
+    // 删
     delete?: string[];
   };
 }
@@ -78,21 +95,26 @@ export interface IDbInstall {
 #### OpenIdbResult
 
 ```ts
-// openIdb返回结果
-export interface OpenIdbResult {
-  // 读
-  readonly: (name: string) => IdbReadonly;
-  // 读写
-  readwrite: (name: string) => IdbReadWrite;
-  // 索引 index('member.openid')
-  index: (name: string) => IdbReadonly;
+// IDB.open返回结果
+export class IDB {
+  constructor(public db: IDBDatabase, public name: string);
+  change(tableName: string, type: IDBChange): void;
+  addListener(tableName, it: any): void;
+  removeListener(tableName: string, item: any): void;
+  transaction(
+    storeNames: string | string[],
+    mode?: IDBTransactionMode
+  ): IDBTransaction;
+  readonly(name: string): IDBReadonly;
+  index(name: string): IDBIndexed;
+  readwrite(name: string): IDBReadWrite;
 }
 ```
 
-#### IdbReadonly
+#### IDBReadonly
 
 ```ts
-export interface IdbReadonly {
+export interface IDBReadonly {
   count(key?: IDBValidKey | IDBKeyRange): Observable<number>;
   get(query: IDBValidKey | IDBKeyRange): Observable<any | undefined>;
   getAllKeys(
@@ -111,13 +133,19 @@ export interface IdbReadonly {
 }
 ```
 
-#### IdbReadWrite
+#### IDBReadWrite
 
 ```ts
-export interface IdbReadWrite extends IdbReadonly {
+export interface IDBReadWrite extends IDBReadonly {
   add(value: any, key?: IDBValidKey | IDBKeyRange): Observable<IDBValidKey>;
   delete(key: IDBValidKey | IDBKeyRange): Observable<undefined>;
   clear(): Observable<undefined>;
   put(value: any, key?: IDBValidKey | IDBKeyRange): Observable<IDBValidKey>;
 }
+```
+
+### IDBIndexed
+
+```ts
+export class IDBIndexed extends IDBReadonly {}
 ```
