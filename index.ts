@@ -52,21 +52,14 @@ export function openIdb(
   name: string = "imeepos",
   version: number = 1,
   install?: IDbInstall
-): Promise<OpenIdbResult> {
+): Observable<OpenIdbResult> {
   return new Observable<OpenIdbResult>(obs => {
-    let upgradeneeded = new Subject();
-    let updating = false;
-    let sub = new Subscription();
     function onupgradeneeded(event: IDBVersionChangeEvent) {
-      updating = true;
       let db: IDBDatabase = (event.target as any).result;
-      let dbHandler: OpenIdbResult = create(db);
       let { newVersion, oldVersion } = event;
       // install
       if (install) {
-        let updates = [];
         for (oldVersion; oldVersion < newVersion; oldVersion++) {
-          let obs: Subject<void> = new Subject();
           let item = install[`${oldVersion}-${newVersion}`];
           if (item.create) {
             item.create.forEach(store => {
@@ -87,11 +80,11 @@ export function openIdb(
           }
           if (item.update) {
             let keys = Object.keys(item.update);
+            let transaction: IDBTransaction = db.transaction(
+              keys,
+              "versionchange"
+            );
             if (keys.length > 0) {
-              let transaction: IDBTransaction = db.transaction(
-                keys,
-                "versionchange"
-              );
               keys.map((key, index) => {
                 let store: IDBObjectStore = transaction.objectStore(key);
                 let data = item.update[key];
@@ -103,31 +96,12 @@ export function openIdb(
                   store.deleteIndex(name);
                 });
               });
-              transaction.oncomplete = function() {
-                obs.next();
-                obs.complete();
-              };
               transaction.onerror = function() {
                 obs.error(new Error(`更新失败`));
               };
             }
-          } else {
-            obs.next();
-            obs.complete();
           }
-          updates.push(obs);
         }
-        sub.add(
-          forkJoin(...updates)
-            .pipe(takeLast(1))
-            .subscribe(() => {
-              upgradeneeded.next(dbHandler);
-              upgradeneeded.complete();
-            })
-        );
-      } else {
-        upgradeneeded.next(dbHandler);
-        upgradeneeded.complete();
       }
     }
     let openDBRequest: IDBOpenDBRequest = indexedDB.open(name, version);
@@ -139,19 +113,10 @@ export function openIdb(
       console.log("onblocked");
     };
     openDBRequest.onsuccess = function() {
-      upgradeneeded.next(create(openDBRequest.result));
-      if (!updating) {
-        upgradeneeded.complete();
-      }
+      obs.next(create(openDBRequest.result));
+      obs.complete();
     };
-    sub.add(
-      upgradeneeded.pipe(takeLast(1)).subscribe((res: any) => {
-        obs.next(res);
-        obs.complete();
-        sub.unsubscribe();
-      })
-    );
-  }).toPromise();
+  });
 }
 
 function create(db: IDBDatabase): OpenIdbResult {
@@ -242,7 +207,15 @@ function createObservable<T>(target: IDBRequest<T>): Observable<T> {
       map(() => target.result)
     );
     let error = fromEvent(target, "error");
-    sub.add(error.subscribe(res => obs.error(res)));
+    sub.add(
+      error.subscribe(res => {
+        try {
+          obs.error((res.target as any).error);
+        } catch (e) {
+          obs.error(e);
+        }
+      })
+    );
     sub.add(
       success.subscribe(res => {
         obs.next(res);

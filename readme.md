@@ -1,3 +1,8 @@
+## 库
+1. rxjs 强大的异步管理库
+
+## 浏览器端 indexed db 封装成更简洁易操作的接口
+
 ## demo
 
 ```ts
@@ -21,10 +26,15 @@ async function bootstrap() {
       ]
     }
   };
-  let db = await openIdb("imeepos", 1, update);
-  let addResult = await db.readwrite("member").add({
-    openid: "fromUser"
-  });
+  let db = await openIdb("imeepos", 1, update).toPromise();
+  console.log(db);
+  let addResult = await db
+    .readwrite("member")
+    .add({
+      openid: "fromUser"
+    })
+    .toPromise();
+  console.log(addResult);
 }
 bootstrap();
 ```
@@ -41,7 +51,27 @@ export function openIdb(
   version: number = 1,
   // 数据库更新及安装脚本
   install?: IDbInstall
-): Promise<OpenIdbResult>;
+): Observable<OpenIdbResult>;
+```
+
+### IDbInstall
+
+```ts
+export interface IDbInstall {
+  [key: string]: {
+    // 新建
+    create?: IdbCreate[];
+    // 更新
+    update?: {
+      [key: string]: {
+        create: IdbIndex[];
+        delete: string[];
+      };
+    };
+    // 删除
+    delete?: string[];
+  };
+}
 ```
 
 ### OpenIdbResult
@@ -59,6 +89,7 @@ export interface OpenIdbResult {
 ```
 
 ### IdbReadonly
+
 ```ts
 export interface IdbReadonly {
   count(key?: IDBValidKey | IDBKeyRange): Observable<number>;
@@ -78,31 +109,14 @@ export interface IdbReadonly {
   ): Observable<IDBCursor | null>;
 }
 ```
+
 ### IdbReadWrite
+
 ```ts
 export interface IdbReadWrite extends IdbReadonly {
   add(value: any, key?: IDBValidKey | IDBKeyRange): Observable<IDBValidKey>;
   delete(key: IDBValidKey | IDBKeyRange): Observable<undefined>;
   clear(): Observable<undefined>;
   put(value: any, key?: IDBValidKey | IDBKeyRange): Observable<IDBValidKey>;
-}
-```
-### IDbInstall
-
-```ts
-export interface IDbInstall {
-  [key: string]: {
-    // 新建
-    create?: IdbCreate[];
-    // 更新
-    update?: {
-      [key: string]: {
-        create: IdbIndex[];
-        delete: string[];
-      };
-    };
-    // 删除
-    delete?: string[];
-  };
 }
 ```
