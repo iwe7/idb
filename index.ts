@@ -1,5 +1,5 @@
-import { Observable, Subject, Subscription, forkJoin } from "rxjs";
-import { takeLast } from "rxjs/operators";
+import { Observable, Subject, Subscription, forkJoin, fromEvent } from "rxjs";
+import { takeLast, map } from "rxjs/operators";
 interface IdbCreate extends IDBObjectStoreParameters {
   name: string;
   index: IdbIndex[];
@@ -20,13 +20,33 @@ export interface IDbInstall {
     delete?: string[];
   };
 }
-export interface IdbWrite {
-  add(value: any, key?: IDBValidKey | IDBKeyRange): Promise<IDBValidKey>;
+export interface IdbReadonly {
+  count(key?: IDBValidKey | IDBKeyRange): Observable<number>;
+  get(query: IDBValidKey | IDBKeyRange): Observable<any | undefined>;
+  getAllKeys(
+    query?: IDBValidKey | IDBKeyRange,
+    count?: number
+  ): Observable<IDBValidKey[]>;
+  getKey(query: IDBValidKey | IDBKeyRange): Observable<IDBValidKey | undefined>;
+  openCursor(
+    range?: IDBValidKey | IDBKeyRange,
+    direction?: IDBCursorDirection
+  ): Observable<IDBCursorWithValue | null>;
+  openKeyCursor(
+    query?: IDBValidKey | IDBKeyRange,
+    direction?: IDBCursorDirection
+  ): Observable<IDBCursor | null>;
+}
+export interface IdbReadWrite extends IdbReadonly {
+  add(value: any, key?: IDBValidKey | IDBKeyRange): Observable<IDBValidKey>;
+  delete(key: IDBValidKey | IDBKeyRange): Observable<undefined>;
+  clear(): Observable<undefined>;
+  put(value: any, key?: IDBValidKey | IDBKeyRange): Observable<IDBValidKey>;
 }
 export interface OpenIdbResult {
-  readonly: (name: string) => IDBObjectStore;
-  readwrite: (name: string) => IdbWrite;
-  index: (name: string) => IDBIndex;
+  readonly: (name: string) => IdbReadonly;
+  readwrite: (name: string) => IdbReadWrite;
+  index: (name: string) => IdbReadonly;
 }
 export function openIdb(
   name: string = "imeepos",
@@ -134,39 +154,101 @@ export function openIdb(
   }).toPromise();
 }
 
-function create(db: IDBDatabase) {
+function create(db: IDBDatabase): OpenIdbResult {
   function transaction(
     storeNames: string | string[],
     mode?: IDBTransactionMode
   ): IDBTransaction {
     return db.transaction(storeNames, mode);
   }
-  function readonly(name: string): IDBObjectStore {
-    return transaction(name, "readonly").objectStore(name);
+  function readonly(name: string): IdbReadonly {
+    let store = transaction(name, "readonly").objectStore(name);
+    return createReadonlyStore(store);
   }
-  function index(name: string): IDBIndex {
+  function index(name: string): IdbReadonly {
     let index = name.split(".");
     let [table, idx] = index;
-    return readonly(table).index(idx);
+    let idbIndex: IDBIndex = transaction(table, "readonly")
+      .objectStore(table)
+      .index(idx);
+    return createIndexStore(idbIndex);
   }
-  function readwrite(name: string): IdbWrite {
+  function readwrite(name: string): IdbReadWrite {
     let store = transaction(name, "readwrite").objectStore(name);
-    return createWriteStore(store);
+    return createReadWriteStore(store);
   }
-  return { readonly, index, readwrite };
+  return { readonly: readonly, index, readwrite };
 }
-
-function createWriteStore(store: IDBObjectStore) {
-  function add(value: any, key?: IDBValidKey | IDBKeyRange) {
-    return new Promise<IDBValidKey>((resolve, reject) => {
-      let request = store.add(value, key);
-      request.onsuccess = function() {
-        resolve(request.result);
-      };
-      request.onerror = function() {
-        reject(new Error(`插入数据失败`));
-      };
-    });
+function createReadonlyStore(store: IDBObjectStore | IDBIndex): IdbReadonly {
+  function count(key?: IDBValidKey | IDBKeyRange): Observable<number> {
+    return createObservable(store.count(key));
   }
-  return { add };
+  function get(query: IDBValidKey | IDBKeyRange): Observable<any> {
+    return createObservable(store.get(query));
+  }
+  function getAllKeys(
+    query?: IDBValidKey | IDBKeyRange,
+    count?: number
+  ): Observable<IDBValidKey[]> {
+    return createObservable(store.getAllKeys(query, count));
+  }
+  function getKey(
+    query: IDBValidKey | IDBKeyRange
+  ): Observable<IDBValidKey | undefined> {
+    return createObservable(store.getKey(query));
+  }
+  function openCursor(
+    range?: IDBValidKey | IDBKeyRange,
+    direction?: IDBCursorDirection
+  ): Observable<IDBCursorWithValue | null> {
+    return createObservable(store.openCursor(range, direction));
+  }
+  function openKeyCursor(
+    query?: IDBValidKey | IDBKeyRange,
+    direction?: IDBCursorDirection
+  ): Observable<IDBCursor | null> {
+    return createObservable(store.openKeyCursor(query, direction));
+  }
+  return { openKeyCursor, openCursor, getKey, getAllKeys, get, count };
+}
+function createReadWriteStore(store: IDBObjectStore): IdbReadWrite {
+  function add(
+    value: any,
+    key?: IDBValidKey | IDBKeyRange
+  ): Observable<IDBValidKey> {
+    return createObservable(store.add(value, key));
+  }
+  function _delete(key: IDBValidKey | IDBKeyRange): Observable<undefined> {
+    return createObservable(store.delete(key));
+  }
+  function clear(): Observable<undefined> {
+    return createObservable(store.clear());
+  }
+  function put(
+    value: any,
+    key?: IDBValidKey | IDBKeyRange
+  ): Observable<IDBValidKey> {
+    return createObservable(store.put(value, key));
+  }
+  return { ...createReadonlyStore(store), add, delete: _delete, clear, put };
+}
+function createIndexStore(index: IDBIndex) {
+  return createReadonlyStore(index);
+}
+function createObservable<T>(target: IDBRequest<T>): Observable<T> {
+  return new Observable(obs => {
+    let sub = new Subscription();
+    let success = fromEvent<T>(target, "success").pipe(
+      map(() => target.result)
+    );
+    let error = fromEvent(target, "error");
+    sub.add(error.subscribe(res => obs.error(res)));
+    sub.add(
+      success.subscribe(res => {
+        obs.next(res);
+        obs.complete();
+      })
+    );
+    return () => sub.unsubscribe();
+  });
 }
