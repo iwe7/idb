@@ -1,14 +1,10 @@
 import { Observable, Subject, Subscription, forkJoin } from "rxjs";
 import { takeLast } from "rxjs/operators";
-export interface IdbCreate extends IDBObjectStoreParameters {
+interface IdbCreate extends IDBObjectStoreParameters {
   name: string;
   index: IdbIndex[];
 }
-export interface IdbUpdate {
-  old: any;
-  new: any;
-}
-export interface IdbIndex extends IDBIndexParameters {
+interface IdbIndex extends IDBIndexParameters {
   name: string;
   keyPath: string | string[];
 }
