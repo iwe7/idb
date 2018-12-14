@@ -1,9 +1,10 @@
-## 库
-1. rxjs 强大的异步管理库
+> 浏览器端 indexed db 封装成更简洁易操作的接口
 
-## 浏览器端 indexed db 封装成更简洁易操作的接口
+### 技术栈
 
-## demo
+- rxjs 强大的异步管理库
+
+### demo
 
 ```ts
 import { openIdb, IDbInstall } from "imeepos/idb";
@@ -39,9 +40,9 @@ async function bootstrap() {
 bootstrap();
 ```
 
-## docs
+### docs
 
-### openIdb
+#### openIdb
 
 ```ts
 export function openIdb(
@@ -54,7 +55,7 @@ export function openIdb(
 ): Observable<OpenIdbResult>;
 ```
 
-### IDbInstall
+#### IDbInstall
 
 ```ts
 export interface IDbInstall {
@@ -74,7 +75,7 @@ export interface IDbInstall {
 }
 ```
 
-### OpenIdbResult
+#### OpenIdbResult
 
 ```ts
 // openIdb返回结果
@@ -88,7 +89,7 @@ export interface OpenIdbResult {
 }
 ```
 
-### IdbReadonly
+#### IdbReadonly
 
 ```ts
 export interface IdbReadonly {
@@ -110,7 +111,7 @@ export interface IdbReadonly {
 }
 ```
 
-### IdbReadWrite
+#### IdbReadWrite
 
 ```ts
 export interface IdbReadWrite extends IdbReadonly {
