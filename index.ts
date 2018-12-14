@@ -28,8 +28,8 @@ export interface IdbWrite {
   add(value: any, key?: IDBValidKey | IDBKeyRange): Promise<IDBValidKey>;
 }
 export interface OpenIdbResult {
-  read: (name: string) => IDBObjectStore;
-  write: (name: string) => IdbWrite;
+  readonly: (name: string) => IDBObjectStore;
+  readwrite: (name: string) => IdbWrite;
   index: (name: string) => IDBIndex;
 }
 export function openIdb(
@@ -145,19 +145,19 @@ function create(db: IDBDatabase) {
   ): IDBTransaction {
     return db.transaction(storeNames, mode);
   }
-  function read(name: string): IDBObjectStore {
+  function readonly(name: string): IDBObjectStore {
     return transaction(name, "readonly").objectStore(name);
   }
   function index(name: string): IDBIndex {
     let index = name.split(".");
     let [table, idx] = index;
-    return read(table).index(idx);
+    return readonly(table).index(idx);
   }
-  function write(name: string): IdbWrite {
+  function readwrite(name: string): IdbWrite {
     let store = transaction(name, "readwrite").objectStore(name);
     return createWriteStore(store);
   }
-  return { read, index, write };
+  return { readonly, index, readwrite };
 }
 
 function createWriteStore(store: IDBObjectStore) {

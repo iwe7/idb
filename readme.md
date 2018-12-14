@@ -20,7 +20,7 @@ async function bootstrap() {
     }
   };
   let db = await openIdb("imeepos", 1, update);
-  let addResult = await db.write("member").add({
+  let addResult = await db.readwrite("member").add({
     openid: "fromUser"
   });
 }
