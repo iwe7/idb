@@ -26,12 +26,16 @@ export class IDB {
             let item = install[`${oldVersion}-${newVersion}`];
             if (item.create) {
               item.create.forEach(store => {
-                let { name, index, ...opt } = store;
+                let { name, index, data, ...opt } = store;
                 if (!db.objectStoreNames.contains(name)) {
                   let objectStore = db.createObjectStore(name, opt);
                   index.forEach(idx => {
                     let { name, keyPath, ...opt } = idx;
                     objectStore.createIndex(name, keyPath, opt);
+                  });
+                  // data
+                  data.map(da => {
+                    objectStore.add(da);
                   });
                 }
               });
@@ -89,6 +93,7 @@ export class IDB {
       it.run();
     });
   }
+
   addListener(tableName, it: any) {
     let set = this.cache.get(tableName);
     set.set(it.getKey(), it);

@@ -2,6 +2,7 @@ export type IDBChange = "add" | "delete" | "clear" | "put";
 interface IdbCreate extends IDBObjectStoreParameters {
   name: string;
   index: IdbIndex[];
+  data?: any[];
 }
 interface IdbIndex extends IDBIndexParameters {
   name: string;
@@ -14,6 +15,7 @@ export interface IDbInstall {
       [key: string]: {
         create: IdbIndex[];
         delete: string[];
+        data?: any[];
       };
     };
     delete?: string[];

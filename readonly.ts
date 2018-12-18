@@ -10,6 +10,7 @@ import { IDB } from "./idb";
 type IDBMethod =
   | "count"
   | "get"
+  | "getAll"
   | "getAllKeys"
   | "getKey"
   | "openCursor"
@@ -110,7 +111,11 @@ export class BaseSubscriber<T = any> extends Subscriber<T> {
       this.idb.change(this.tableName, this.method);
     } else {
       if (this.listen) {
-        this.idb.addListener(this.tableName, this);
+        if (this.model === "indexed") {
+          this.idb.addListener(this.tableName.split(".")[0], this);
+        } else {
+          this.idb.addListener(this.tableName, this);
+        }
       }
     }
   }
@@ -190,6 +195,13 @@ export class IDBReadonly extends IDBBase {
   }
   get(listen: boolean, query: IDBValidKey | IDBKeyRange): Observable<any> {
     return this.create(listen, "get", query);
+  }
+  getAll(
+    listen: boolean,
+    query?: IDBValidKey | IDBKeyRange,
+    count?: number
+  ): Observable<any[]> {
+    return this.create(listen, "getAll", query, count);
   }
   getAllKeys(
     listen: boolean,
